@@ -24,40 +24,59 @@ import org.apache.catalina.LifecycleException;
  */
 public class DevLoader extends WebappLoader {
 	private static final String info =
-        "org.apache.catalina.loader.DevLoader/1.0"; 
+        "org.apache.catalina.loader.DevLoader/1.0";
 
 	private String webClassPathFile = ".#webclasspath";
 	private String tomcatPluginFile = ".tomcatplugin";
 	private String devloaderConfFile = "conf/devloader.conf";
-	
+
 	public DevLoader() {
-		super();		
-	}		
+		super();
+	}
 	public DevLoader(ClassLoader parent) {
 		super(parent);
 	}
-	
+
 	/**
 	 * @see org.apache.catalina.Lifecycle#start()
 	 */
 	public void start() throws LifecycleException {
 		log("Starting DevLoader");
 		//setLoaderClass(DevWebappClassLoader.class.getName());
-		
+
 		super.start();
-		
+
 		ClassLoader cl = super.getClassLoader();
 		if (cl instanceof WebappClassLoader == false) {
 			logError("Unable to install WebappClassLoader !");
 			return;
 		}
 		WebappClassLoader devCl = (WebappClassLoader) cl;
-		
+
 		List webClassPathEntries = readWebClassPathEntries();
 		List excludeWebClassPathEntries = readExcludeWebClassPathEntries();
 		StringBuffer classpath   = new StringBuffer();
+		String ownerProjectPath = null;
+		String matchKeyword = "/target/classes";
 		for (Iterator it = webClassPathEntries.iterator(); it.hasNext();) {
 			String entry = (String) it.next();
+
+			if (ownerProjectPath == null && entry.endsWith(matchKeyword)) {
+				int endIndex = entry.length() - matchKeyword.length();
+				String owner = entry.substring(0, endIndex);
+				log("owner folder is [" + owner + "]");
+				String[] folders = owner.split("/");
+				endIndex = owner.length()
+						- (folders[folders.length - 1].length() + 1);
+				ownerProjectPath = owner.substring(0, endIndex);
+			}
+
+			if (ownerProjectPath != null && entry.startsWith("/")) {
+				log("entry exchange [" + entry + "]  to [" + ownerProjectPath
+						+ entry + matchKeyword + "]");
+				entry = ownerProjectPath + entry + matchKeyword;
+			}
+
 			File f = new File(entry);
 			if (f.exists()) {
 				if (f.isDirectory() && entry.endsWith("/")==false) f = new File(entry + "/");
@@ -102,7 +121,7 @@ public class DevLoader extends WebappLoader {
 		StringTokenizer tokenizer = new StringTokenizer(cp, File.pathSeparatorChar+"");
 		while(tokenizer.hasMoreTokens()) {
 			String token = tokenizer.nextToken();
-			// only on windows 
+			// only on windows
 			if (token.charAt(0)=='/' && token.charAt(2)==':') token = token.substring(1);
 			classpath.append(token + File.pathSeparatorChar);
 		}
@@ -113,7 +132,7 @@ public class DevLoader extends WebappLoader {
 		String systemClassPath = System.getProperty("java.class.path");
 		String originalSystemClassPath = System.getProperty("java.class.path.devloader");
 		if (originalSystemClassPath == null) {
-			System.setProperty("java.class.path.devloader", systemClassPath);			
+			System.setProperty("java.class.path.devloader", systemClassPath);
 		} else {
 			systemClassPath = originalSystemClassPath;
 		}
@@ -122,35 +141,35 @@ public class DevLoader extends WebappLoader {
 		System.setProperty("java.class.path", systemClassPath);
 		log("temporary system Classpath: " + System.getProperty("java.class.path"));
 	}
-	
+
 	protected void log(String msg) {
 		System.out.println("[DevLoader] " + msg);
 	}
 	protected void logError(String msg) {
 		System.err.println("[DevLoader] Error: " + msg);
 	}
-	
+
 	protected List readWebClassPathEntries() {
 		List rc = null;
-				
+
 		File prjDir = getProjectRootDir();
 		if (prjDir == null) {
 			return new ArrayList();
 		}
 		log("projectdir=" + prjDir.getAbsolutePath());
-		
+
 		// try loading tomcat plugin file
 		// DON"T LOAD TOMCAT PLUGIN FILE (DOESN't HAVE FULL PATHS ANYMORE)
 		//rc = loadTomcatPluginFile(prjDir);
-		
+
 		if (rc ==null) {
 			rc = loadWebClassPathFile(prjDir);
 		}
-		
+
 		if (rc == null) rc = new ArrayList(); // should not happen !
 		return rc;
 	}
-	
+
 	protected File getProjectRootDir() {
 		File rootDir = getWebappDir();
 		FileFilter filter = new FileFilter() {
@@ -168,10 +187,10 @@ public class DevLoader extends WebappLoader {
 		}
 		return null;
 	}
-	
+
 	protected List loadWebClassPathFile(File prjDir) {
 		File cpFile = new File(prjDir, webClassPathFile);
-		if (cpFile.exists()) {			
+		if (cpFile.exists()) {
 			FileReader reader = null;
 			try {
 				List rc = new ArrayList();
@@ -187,20 +206,20 @@ public class DevLoader extends WebappLoader {
 			} catch(IOException ioEx) {
 				if (reader != null) try { reader.close(); } catch(Exception ignored) {}
 				return null;
-			}			
+			}
 		} else {
 			return null;
 		}
 	}
-	
+
 /*
 	protected List loadTomcatPluginFile(File prjDir) {
 		File cpFile = new File(prjDir, tomcatPluginFile);
-		if (cpFile.exists()) {			
+		if (cpFile.exists()) {
 			FileReader reader = null;
 			try {
 				StringBuffer buf = new StringBuffer();
-				
+
 				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(cpFile)));
 				String inputLine;
 				while ((inputLine = in.readLine()) != null) {
@@ -215,14 +234,14 @@ public class DevLoader extends WebappLoader {
 				return entries.getList();
 			} catch(IOException ioEx) {
 				if (reader != null) try { reader.close(); } catch(Exception ignored) {}
-				return null;				
+				return null;
 			}
 		} else {
-			return null;			
+			return null;
 		}
 	}
-*/	
-	
+*/
+
 	protected List readExcludeWebClassPathEntries() {
 		String catalinaBase = System.getProperty("catalina.base");
 		File confFile = new File(catalinaBase, devloaderConfFile);
@@ -256,12 +275,12 @@ public class DevLoader extends WebappLoader {
 		}
 		return re;
 	}
-	
+
 	protected ServletContext getServletContext() {
 		return ((Context) getContainer()).getServletContext();
 	}
-	
-	protected File getWebappDir() {		
+
+	protected File getWebappDir() {
 		File webAppDir = new File(getServletContext().getRealPath("/"));
 		return webAppDir;
 	}
